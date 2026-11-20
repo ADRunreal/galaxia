@@ -616,6 +616,7 @@ const smoothstep = (x, a, b) => {
   return t * t * (3 - 2 * t);
 };
 const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 function setLoader(pct, txt) {
   const p = document.getElementById('loaderProgress');
@@ -855,6 +856,7 @@ composer.addPass(new OutputPass());
 
 /* ═══════════════ FONDO ESTELAR + NEBULOSAS ═══════════════ */
 let bgStarsMat = null;
+let bgStarsObj = null;
 (function buildStarfield() {
   const N = 8000;
   const pos = new Float32Array(N * 3);
@@ -912,6 +914,7 @@ let bgStarsMat = null;
   pts.frustumCulled = false;
   scene.add(pts);
   bgStarsMat = mat;
+  bgStarsObj = pts;
 })();
 
 const nebulaeGroup = new THREE.Group();
@@ -1492,6 +1495,7 @@ setLoader(10, 'Cargando texturas de la Tierra…');
 const manager = new THREE.LoadingManager();
 let texDone = false;
 manager.onLoad = () => { texDone = true; maybeHideLoader(); };
+manager.onError = () => { texDone = true; maybeHideLoader(); };
 const texLoader = new THREE.TextureLoader(manager);
 function loadTex(url, fallbackColor) {
   const t = texLoader.load(
@@ -1700,14 +1704,13 @@ class CelestialBody {
     this.holder.add(this.satelliteGroup);
 
     const segs = data.radius > 1 ? 64 : (data.radius > 0.3 ? 48 : 24);
-    const geo = new THREE.SphereGeometry(data.radius, segs, Math.max(12, segs / 2));
+    const geo = new THREE.SphereGeometry(data.radius, segs, Math.max(12, Math.floor(segs / 2)));
     const mat = this._createMaterial();
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.userData.bodyId = data.id;
     this.tiltGroup.add(this.mesh);
     clickTargets.push(this.mesh);
 
-    // Hitbox para cuerpos muy pequeños
     if (data.radius < minHitRadius) {
       const hb = new THREE.Mesh(
         new THREE.SphereGeometry(minHitRadius, 8, 6),
@@ -1726,6 +1729,11 @@ class CelestialBody {
     if (data.isNebula) this._addNebulaEffect();
     if (data.isGalaxy) this._addGalaxyEffect();
     if (data.isArtificial) this._addArtificialMarker();
+
+    this._lastWorldPos = new THREE.Vector3();
+    this.mesh.getWorldPosition(this._lastWorldPos);
+
+    bodies[data.id] = this;
   }
 
   _createMaterial() {
@@ -1874,82 +1882,113 @@ class CelestialBody {
   }
 
   _addNebulaEffect() {
-    const tex = makeNebulaTexture(...(this.data.nebulaColor || [200, 150, 255]));
-    this.nebulaSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, transparent: true, opacity: 0.85, depthWrite: false,
-      blending: THREE.AdditiveBlending
-    }));
-    this.nebulaSprite.scale.setScalar(this.data.radius * 3);
-    this.tiltGroup.add(this.nebulaSprite);
+    const [r, g, b] = this.data.nebulaColor || [255, 130, 200];
+    const tex = makeNebulaTexture(r, g, b);
+    const sprMat = new THREE.SpriteMaterial({
+      map: tex, transparent: true, opacity: 0.55,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const spr = new THREE.Sprite(sprMat);
+    spr.scale.setScalar(this.data.radius * 3.0);
+    this.tiltGroup.add(spr);
+
+    const glowTex = makeGlowTexture(
+      `rgba(${r},${g},${b},1)`,
+      `rgba(${r},${g},${b},0.35)`,
+      `rgba(${r},${g},${b},0)`
+    );
+    const glowMat = new THREE.SpriteMaterial({
+      map: glowTex, transparent: true, opacity: 0.4,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const glow = new THREE.Sprite(glowMat);
+    glow.scale.setScalar(this.data.radius * 5.5);
+    this.tiltGroup.add(glow);
+
     this.mesh.visible = false;
+    this.nebulaSprites = [spr, glow];
   }
 
   _addGalaxyEffect() {
     const tex = makeSpiralGalaxyTexture();
-    this.galaxySprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, transparent: true, opacity: 0.95, depthWrite: false,
-      blending: THREE.AdditiveBlending, color: this.data.color
-    }));
-    this.galaxySprite.scale.setScalar(this.data.radius * 3.5);
-    this.tiltGroup.add(this.galaxySprite);
+    const sprMat = new THREE.SpriteMaterial({
+      map: tex, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false
+    });
+    const spr = new THREE.Sprite(sprMat);
+    spr.scale.setScalar(this.data.radius * 4.0);
+    this.tiltGroup.add(spr);
     this.mesh.visible = false;
+    this.galaxySprite = spr;
   }
 
   _addArtificialMarker() {
-    const tex = makeGlowTexture('rgba(255,255,255,1)', 'rgba(200,220,255,0.4)', 'rgba(0,0,0,0)');
-    this.markerSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    const tex = makeGlowTexture(
+      'rgba(255,255,255,1)',
+      'rgba(255,220,150,0.5)',
+      'rgba(255,200,100,0)'
+    );
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
       map: tex, color: this.data.color, transparent: true, opacity: 0.9,
       blending: THREE.AdditiveBlending, depthWrite: false
     }));
-    this.markerSprite.scale.setScalar(this.data.radius * 8);
-    this.tiltGroup.add(this.markerSprite);
+    spr.scale.setScalar(0.35);
+    this.tiltGroup.add(spr);
+    this.marker = spr;
   }
 
-  update(simTime, delta, timeScale) {
+  update(dt, elapsed, speedFactor) {
     const d = this.data;
-    if (d.parent) {
-      this.orbitAngle += d.orbitSpeed * delta * timeScale;
-      this.orbitGroup.rotation.y = this.orbitAngle;
+    if (d.orbitSpeed && d.parent !== null) {
+      this.orbitAngle += d.orbitSpeed * dt * 0.4 * speedFactor;
+    } else if (d.orbitSpeed) {
+      this.orbitAngle += d.orbitSpeed * dt * 0.05 * speedFactor;
+    }
+    if (d.parent === null && d.orbitRadius) {
+      const x = Math.cos(this.orbitAngle) * d.orbitRadius;
+      const z = Math.sin(this.orbitAngle) * d.orbitRadius;
+      this.orbitGroup.position.set(x, 0, z);
+    } else {
+      this.orbitGroup.position.set(0, 0, 0);
     }
     if (d.rotSpeed) {
-      this.mesh.rotation.y += d.rotSpeed * delta * timeScale;
+      this.mesh.rotation.y += d.rotSpeed * dt * speedFactor;
+      if (this.clouds) this.clouds.rotation.y += d.rotSpeed * dt * speedFactor * 1.15;
     }
-    if (this.clouds && d.rotSpeed) {
-      this.clouds.rotation.y += d.rotSpeed * 0.4 * delta * timeScale;
-    }
-    if (this.mesh.material.uniforms?.time) {
-      this.mesh.material.uniforms.time.value = simTime;
-    }
-    if (this.disk) {
-      this.disk.material.uniforms.time.value = simTime;
-    }
+    this.mesh.getWorldPosition(this._lastWorldPos);
   }
 
-  updateTail() {
-    if (!this.tail) return;
-    const p = new THREE.Vector3();
-    this.mesh.getWorldPosition(p);
-    const dir = p.clone().normalize();
-    this.tail.position.copy(p);
-    const look = p.clone().add(dir);
-    this.tail.lookAt(look);
-    const dist = p.length();
-    const len = Math.max(1.5, 15 - dist * 0.05);
-    this.tail.scale.setScalar(Math.max(0.5, this.data.radius * 4 + len * 0.2));
+  updateShader(t) {
+    if (this.data.id === 'sun' || this.data.category === 'Estrellas') {
+      if (this.mesh.material.uniforms) this.mesh.material.uniforms.time.value = t;
+      if (this.coronaA) {
+        const s = this.data.radius * (6 + Math.sin(t * 1.3) * 0.25);
+        this.coronaA.scale.set(s, s, 1);
+      }
+    }
+    if (this.disk) this.disk.material.uniforms.time.value = t;
+    if (this.photonRing) {
+      this.photonRing.material.opacity = 0.6 + 0.3 * Math.sin(t * 3.0);
+    }
+    if (this.nebulaSprites) {
+      const [spr, glow] = this.nebulaSprites;
+      spr.material.opacity = 0.4 + 0.18 * Math.sin(t * 0.6);
+      glow.material.opacity = 0.3 + 0.12 * Math.sin(t * 0.9 + 1.0);
+    }
+    if (this.galaxySprite) {
+      this.galaxySprite.material.rotation = t * 0.03;
+    }
+    if (this.marker) {
+      this.marker.material.opacity = 0.6 + 0.35 * Math.sin(t * 4.0);
+    }
   }
 }
 
-/* ═══════════════ CONSTRUCCIÓN DEL SISTEMA SOLAR ═══════════════ */
-setLoader(55, 'Colocando los planetas…');
+/* ═══════════════ CREACIÓN DE CUERPOS ═══════════════ */
+setLoader(55, 'Instanciando cuerpos celestes…');
 
-// Crear cuerpos
 for (const data of BODIES_DATA) {
-  bodies[data.id] = new CelestialBody(data);
-}
-
-// Añadir a la jerarquía
-for (const data of BODIES_DATA) {
-  const body = bodies[data.id];
+  const body = new CelestialBody(data);
   if (data.parent && bodies[data.parent]) {
     bodies[data.parent].satelliteGroup.add(body.orbitGroup);
   } else {
@@ -1957,374 +1996,337 @@ for (const data of BODIES_DATA) {
   }
 }
 
-// Líneas de órbita
-function makeOrbitLine(radius) {
-  const segs = 128;
-  const pts = [];
-  for (let i = 0; i <= segs; i++) {
-    const a = (i / segs) * TAU;
-    pts.push(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
-  }
-  const geo = new THREE.BufferGeometry().setFromPoints(pts);
-  const mat = new THREE.LineBasicMaterial({
-    color: 0x5b8cff, transparent: true, opacity: 0.16
-  });
-  return new THREE.LineLoop(geo, mat);
-}
-for (const data of BODIES_DATA) {
-  if (data.parent && data.orbitRadius > 0) {
-    const line = makeOrbitLine(data.orbitRadius);
-    bodies[data.parent].satelliteGroup.add(line);
+/* ═══════════════ LÍNEAS DE ÓRBITA ═══════════════ */
+(function buildOrbits() {
+  for (const data of BODIES_DATA) {
+    if (!data.orbitRadius || data.parent === null) continue;
+    const radius = data.orbitRadius;
+    const segments = 128;
+    const positions = new Float32Array((segments + 1) * 3);
+    for (let i = 0; i <= segments; i++) {
+      const a = (i / segments) * TAU;
+      positions[i * 3] = Math.cos(a) * radius;
+      positions[i * 3 + 1] = 0;
+      positions[i * 3 + 2] = Math.sin(a) * radius;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const isMoon = data.category === 'Lunas';
+    const mat = new THREE.LineBasicMaterial({
+      color: isMoon ? 0x445577 : 0x335588,
+      transparent: true, opacity: isMoon ? 0.22 : 0.18,
+      depthWrite: false
+    });
+    const line = new THREE.LineLoop(geo, mat);
+    line.userData.bodyId = data.id;
     orbitLines.push(line);
-  }
-}
-
-setLoader(75, 'Preparando etiquetas y UI…');
-
-/* ═══════════════ SISTEMA DE ETIQUETAS 3D ═══════════════ */
-const labelsContainer = document.getElementById('labels');
-let labelsVisible = true;
-for (const body of Object.values(bodies)) {
-  const el = document.createElement('div');
-  el.className = 'body-label hidden';
-  el.textContent = body.data.name;
-  labelsContainer.appendChild(el);
-  body.labelEl = el;
-}
-
-const _v = new THREE.Vector3();
-function updateLabels() {
-  if (!labelsVisible) return;
-  const w = window.innerWidth, h = window.innerHeight;
-  const camDist = camera.position.length();
-  for (const body of Object.values(bodies)) {
-    if (!body.labelEl || !body.mesh) continue;
-    // No mostrar cuerpos diminutos si la cámara está muy lejos
-    body.mesh.getWorldPosition(_v);
-    const distToCam = _v.distanceTo(camera.position);
-    const angularSize = body.data.radius / Math.max(distToCam, 0.001);
-    if (angularSize < 0.002 && body.data.id !== 'sun' && body.data.category !== 'Estrellas' && !body.data.isGalaxy && !body.data.isNebula && !body.data.isBlackHole) {
-      body.labelEl.classList.add('hidden');
-      continue;
+    const parentBody = data.parent ? bodies[data.parent] : null;
+    if (parentBody) {
+      parentBody.satelliteGroup.add(line);
+    } else {
+      solarSystem.add(line);
     }
-    _v.project(camera);
-    const visible = _v.z > -1 && _v.z < 1 && _v.x > -1.15 && _v.x < 1.15 && _v.y > -1.15 && _v.y < 1.15;
-    if (!visible) {
-      body.labelEl.classList.add('hidden');
-      continue;
-    }
-    const x = (_v.x * 0.5 + 0.5) * w;
-    const y = (-_v.y * 0.5 + 0.5) * h;
-    body.labelEl.style.transform = `translate(-50%,-50%) translate(${x}px,${y}px)`;
-    body.labelEl.classList.remove('hidden');
-    body.labelEl.classList.toggle('active', selectedBodyId === body.data.id);
   }
-}
-
-/* ═══════════════ SELECCIÓN 3D ═══════════════ */
-let selectionRing;
-(function initSelectionRing() {
-  const geo = new THREE.RingGeometry(1.05, 1.15, 64);
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0x5b8cff, side: THREE.DoubleSide,
-    transparent: true, opacity: 0.8, depthWrite: false, depthTest: false
-  });
-  selectionRing = new THREE.Mesh(geo, mat);
-  selectionRing.visible = false;
-  selectionRing.renderOrder = 999;
-  scene.add(selectionRing);
 })();
 
-function updateSelectionRing(time) {
-  if (!selectedBodyId || !bodies[selectedBodyId]) {
-    selectionRing.visible = false;
-    return;
-  }
-  const body = bodies[selectedBodyId];
-  body.mesh.getWorldPosition(_v);
-  selectionRing.position.copy(_v);
-  selectionRing.quaternion.copy(camera.quaternion);
-  const s = Math.max(body.data.radius * 2.4, 0.5) * (1 + Math.sin(time * 3) * 0.05);
-  selectionRing.scale.setScalar(s);
-  selectionRing.visible = true;
-  selectionRing.material.opacity = 0.55 + Math.sin(time * 2) * 0.25;
-}
+setLoader(65, 'Construyendo el catálogo…');
 
-/* ═══════════════ UI: CATÁLOGO ═══════════════ */
+/* ═══════════════ CATÁLOGO UI ═══════════════ */
 const catalogEl = document.getElementById('catalog');
 const noResultsEl = document.getElementById('noResults');
-const CATEGORY_ORDER = ['Estrella','Planetas','Lunas','Enanos','Asteroides','Kuiper','Cometas','Artificiales','Estrellas','Exoplanetas','Agujeros Negros','Nebulosas','Galaxias'];
-const CATEGORY_LABELS = {
-  'Estrella': 'Estrella',
+const searchEl = document.getElementById('search');
+const chipsEls = document.querySelectorAll('#filterChips .chip');
+
+const CATEGORY_ORDER = ['Estrella', 'Planetas', 'Enanos', 'Lunas', 'Asteroides', 'Kuiper', 'Cometas', 'Estrellas', 'Exoplanetas', 'Agujeros Negros', 'Nebulosas', 'Galaxias', 'Artificiales'];
+const CATEGORY_LABEL = {
+  'Estrella': 'Estrella central',
   'Planetas': 'Planetas',
-  'Lunas': 'Lunas',
   'Enanos': 'Planetas enanos',
+  'Lunas': 'Lunas',
   'Asteroides': 'Asteroides',
   'Kuiper': 'Cinturón de Kuiper',
   'Cometas': 'Cometas',
-  'Artificiales': 'Objetos artificiales',
   'Estrellas': 'Estrellas cercanas',
   'Exoplanetas': 'Exoplanetas',
   'Agujeros Negros': 'Agujeros negros',
   'Nebulosas': 'Nebulosas',
-  'Galaxias': 'Galaxias'
+  'Galaxias': 'Galaxias',
+  'Artificiales': 'Objetos artificiales'
 };
 
-function hexColor(c) {
-  return '#' + c.toString(16).padStart(6, '0');
+let currentFilter = 'all';
+let currentSearch = '';
+
+function colorToCss(color) {
+  const c = new THREE.Color(color);
+  return '#' + c.getHexString();
 }
 
 function buildCatalog() {
   catalogEl.innerHTML = '';
   for (const cat of CATEGORY_ORDER) {
-    const group = BODIES_DATA.filter(b => b.category === cat);
-    if (group.length === 0) continue;
-    const gEl = document.createElement('div');
-    gEl.className = 'cat-group';
-    gEl.dataset.cat = cat;
-    gEl.innerHTML = `<h3>${CATEGORY_LABELS[cat] || cat}</h3>`;
-    for (const data of group) {
+    const items = BODIES_DATA.filter(b => b.category === cat);
+    if (!items.length) continue;
+    const group = document.createElement('div');
+    group.className = 'cat-group';
+    group.dataset.cat = cat;
+    const title = document.createElement('h3');
+    title.textContent = CATEGORY_LABEL[cat] || cat;
+    group.appendChild(title);
+    for (const item of items) {
       const btn = document.createElement('button');
       btn.className = 'cat-btn';
-      btn.dataset.id = data.id;
+      btn.dataset.id = item.id;
       btn.dataset.cat = cat;
-      btn.setAttribute('role', 'listitem');
+      btn.dataset.name = norm(item.name);
       btn.innerHTML = `
-        <span class="dot" style="background: ${hexColor(data.color)}; color: ${hexColor(data.color)}"></span>
-        <span class="name">${data.name}</span>
-        <span class="badge">${data.type.split('·')[0].trim().slice(0, 14)}</span>
+        <span class="dot" style="background:${colorToCss(item.color)};color:${colorToCss(item.color)}"></span>
+        <span class="name">${item.name}</span>
       `;
-      btn.addEventListener('click', () => {
-        selectBody(data.id, true);
-      });
-      gEl.appendChild(btn);
+      btn.addEventListener('click', () => focusBody(item.id, true));
+      group.appendChild(btn);
     }
-    catalogEl.appendChild(gEl);
+    catalogEl.appendChild(group);
   }
 }
 buildCatalog();
 
-/* ═══════════════ BÚSQUEDA + FILTRO ═══════════════ */
-const searchEl = document.getElementById('search');
-let currentFilter = 'all';
-let currentQuery = '';
-
 function applyFilters() {
-  const q = norm(currentQuery);
+  const q = currentSearch;
   let anyVisible = false;
-  const groups = catalogEl.querySelectorAll('.cat-group');
-  groups.forEach(group => {
+  document.querySelectorAll('.cat-group').forEach(group => {
     const cat = group.dataset.cat;
     const catMatch = currentFilter === 'all' || currentFilter === cat;
     let groupVisible = false;
     group.querySelectorAll('.cat-btn').forEach(btn => {
-      const body = bodies[btn.dataset.id];
-      if (!body) return;
-      const nameN = norm(body.data.name);
-      const typeN = norm(body.data.type);
-      const match = !q || nameN.includes(q) || typeN.includes(q);
-      const visible = catMatch && match;
+      const name = btn.dataset.name;
+      const matchName = !q || name.includes(q);
+      const visible = catMatch && matchName;
       btn.classList.toggle('hidden', !visible);
-      if (visible) {
-        groupVisible = true;
-        anyVisible = true;
-        if (q) {
-          const idx = nameN.indexOf(q);
-          const nameEl = btn.querySelector('.name');
-          if (idx >= 0) {
-            const original = body.data.name;
-            nameEl.innerHTML = original.slice(0, idx) +
-              '<mark>' + original.slice(idx, idx + q.length) + '</mark>' +
-              original.slice(idx + q.length);
-          } else {
-            nameEl.textContent = body.data.name;
-          }
-        } else {
-          btn.querySelector('.name').textContent = body.data.name;
+      if (visible) groupVisible = true;
+      if (q && matchName && name.includes(q)) {
+        const original = BODIES_DATA.find(b => b.id === btn.dataset.id).name;
+        const idx = norm(original).indexOf(q);
+        if (idx >= 0) {
+          const before = original.slice(0, idx);
+          const hit = original.slice(idx, idx + q.length);
+          const after = original.slice(idx + q.length);
+          btn.querySelector('.name').innerHTML = `${before}<mark>${hit}</mark>${after}`;
         }
+      } else {
+        const original = BODIES_DATA.find(b => b.id === btn.dataset.id).name;
+        btn.querySelector('.name').textContent = original;
       }
     });
     group.classList.toggle('hidden', !groupVisible);
+    if (groupVisible) anyVisible = true;
   });
   noResultsEl.style.display = anyVisible ? 'none' : 'block';
 }
 
-let searchTimer = null;
-searchEl.addEventListener('input', (e) => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    currentQuery = e.target.value;
-    applyFilters();
-  }, 80);
-});
-searchEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    const first = catalogEl.querySelector('.cat-btn:not(.hidden)');
-    if (first) selectBody(first.dataset.id, true);
-  }
+searchEl.addEventListener('input', () => {
+  currentSearch = norm(searchEl.value.trim());
+  applyFilters();
 });
 
-document.querySelectorAll('#filterChips .chip').forEach(chip => {
+chipsEls.forEach(chip => {
   chip.addEventListener('click', () => {
-    document.querySelectorAll('#filterChips .chip').forEach(c => c.classList.remove('active'));
+    chipsEls.forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
     currentFilter = chip.dataset.cat;
     applyFilters();
   });
 });
 
-/* ═══════════════ INFO PANEL ═══════════════ */
-const infoEl = document.getElementById('info');
-const infoNameEl = document.getElementById('infoName');
-const infoTypeEl = document.getElementById('infoType');
-const infoDescEl = document.getElementById('infoDesc');
-const infoStatsEl = document.getElementById('infoStats');
+/* ═══════════════ ETIQUETAS 3D ═══════════════ */
+const labelsContainer = document.getElementById('labels');
+const labelMap = {};
+let labelsVisible = true;
 
-function updateInfoPanel(data) {
-  infoNameEl.textContent = data.name;
-  infoTypeEl.textContent = data.type;
-  infoDescEl.textContent = data.desc;
-  infoStatsEl.innerHTML = `
-    <div class="info-stat"><div class="label">Diámetro</div><div class="value">${data.diameter}</div></div>
-    <div class="info-stat"><div class="label">Distancia</div><div class="value">${data.distance}</div></div>
-    <div class="info-stat"><div class="label">Período orbital</div><div class="value">${data.orbPeriod}</div></div>
-    <div class="info-stat"><div class="label">Rotación</div><div class="value">${data.rotPeriod}</div></div>
-  `;
-  infoEl.classList.remove('hidden');
-}
-
-/* ═══════════════ SELECCIÓN Y VIAJE ═══════════════ */
-let selectedBodyId = null;
-let travelAnim = null;
-let trackingBody = null;
-let lastTrackedPos = null;
-
-function computeTravelPosition(body) {
-  const target = new THREE.Vector3();
-  body.mesh.getWorldPosition(target);
-  let dir;
-  if (body.data.parent && bodies[body.data.parent]) {
-    const parentPos = new THREE.Vector3();
-    bodies[body.data.parent].mesh.getWorldPosition(parentPos);
-    dir = new THREE.Vector3().subVectors(target, parentPos).normalize();
-    if (dir.lengthSq() < 0.001) dir.set(0, 0.3, 1).normalize();
-  } else {
-    dir = new THREE.Vector3().subVectors(camera.position, target).normalize();
-    if (dir.lengthSq() < 0.001) dir.set(0, 0.3, 1).normalize();
+function buildLabels() {
+  for (const data of BODIES_DATA) {
+    if (data.isArtificial) continue;
+    const el = document.createElement('div');
+    el.className = 'body-label';
+    el.textContent = data.name;
+    labelsContainer.appendChild(el);
+    labelMap[data.id] = el;
   }
-  const offset = Math.max(body.data.radius * 6, 0.9);
-  return target.clone().add(dir.multiplyScalar(offset));
 }
+buildLabels();
 
-function travelTo(body) {
-  const endPos = computeTravelPosition(body);
-  const target = new THREE.Vector3();
-  body.mesh.getWorldPosition(target);
-  const dist = camera.position.distanceTo(target);
-  const duration = Math.min(2600, 1000 + Math.sqrt(dist) * 26);
-  travelAnim = {
-    startPos: camera.position.clone(),
-    endPos,
-    startTarget: controls.target.clone(),
-    endTarget: target.clone(),
-    startTime: performance.now(),
-    duration,
-    onComplete: () => {
-      trackingBody = body;
-      lastTrackedPos = target.clone();
+const _projVec = new THREE.Vector3();
+function updateLabels() {
+  if (!labelsVisible) {
+    for (const id in labelMap) labelMap[id].classList.add('hidden');
+    return;
+  }
+  const w = window.innerWidth, h = window.innerHeight;
+  for (const data of BODIES_DATA) {
+    const body = bodies[data.id];
+    if (!body) continue;
+    const el = labelMap[data.id];
+    if (!el) continue;
+    const pos = body._lastWorldPos;
+    _projVec.copy(pos).project(camera);
+    if (_projVec.z > 1 || _projVec.z < -1) {
+      el.classList.add('hidden');
+      continue;
     }
-  };
+    const x = (_projVec.x * 0.5 + 0.5) * w;
+    const y = (-_projVec.y * 0.5 + 0.5) * h;
+    if (x < -100 || x > w + 100 || y < -50 || y > h + 50) {
+      el.classList.add('hidden');
+      continue;
+    }
+    const dist = camera.position.distanceTo(pos);
+    if (dist > 3000) {
+      el.classList.add('hidden');
+      continue;
+    }
+    el.classList.remove('hidden');
+    el.style.transform = `translate(${x + 10}px, ${y - 10}px) translate(-50%, -50%)`;
+    el.classList.toggle('active', selectedId === data.id);
+  }
 }
 
-function selectBody(id, travel = false) {
-  if (!bodies[id]) return;
-  selectedBodyId = id;
-  const body = bodies[id];
-  updateInfoPanel(body.data);
-  document.title = `${body.data.name} · Explorador Galáctico`;
-  try { history.replaceState(null, '', `?body=${id}`); } catch (e) {}
-  document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b.dataset.id === id));
-  if (travel) travelTo(body);
+/* ═══════════════ SELECCIÓN / INFO ═══════════════ */
+const infoEl = document.getElementById('info');
+const infoName = document.getElementById('infoName');
+const infoType = document.getElementById('infoType');
+const infoDesc = document.getElementById('infoDesc');
+const infoStats = document.getElementById('infoStats');
+let selectedId = null;
+
+function showInfo(data) {
+  infoName.textContent = data.name;
+  infoType.textContent = data.type;
+  infoDesc.textContent = data.desc;
+  const stats = [
+    ['Diámetro', data.diameter],
+    ['Distancia', data.distance],
+    ['Período orbital', data.orbPeriod],
+    ['Período de rotación', data.rotPeriod]
+  ];
+  infoStats.innerHTML = stats.map(([label, value]) => `
+    <div class="info-stat">
+      <div class="label">${label}</div>
+      <div class="value">${value || '—'}</div>
+    </div>
+  `).join('');
+  infoEl.classList.remove('hidden');
+  selectedId = data.id;
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.id === data.id);
+  });
 }
 
-function deselect() {
-  selectedBodyId = null;
+function hideInfo() {
   infoEl.classList.add('hidden');
-  document.title = 'Explorador Galáctico · Vía Láctea';
-  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  selectedId = null;
+  document.querySelectorAll('.cat-btn.active').forEach(b => b.classList.remove('active'));
 }
 
-/* ═══════════════ RAYCASTING ═══════════════ */
+/* ═══════════════ CÁMARA: VIAJE A CUERPO ═══════════════ */
+let camTween = null;
+function focusBody(id, showPanel = true) {
+  const body = bodies[id];
+  if (!body) return;
+  const data = body.data;
+  const target = body._lastWorldPos.clone();
+  const dist = data.isGalaxy || data.isNebula
+    ? data.radius * 5
+    : Math.max(data.radius * 6, 1.2);
+  const offset = new THREE.Vector3(dist * 0.6, dist * 0.35, dist * 0.8);
+  const camEnd = target.clone().add(offset);
+  const camStart = camera.position.clone();
+  const targetStart = controls.target.clone();
+  camTween = {
+    t: 0, dur: 1.4,
+    camStart, camEnd, targetStart, targetEnd: target
+  };
+  if (showPanel) showInfo(data);
+}
+
+function updateCamTween(dt) {
+  if (!camTween) return;
+  camTween.t += dt / camTween.dur;
+  const t = easeInOutCubic(Math.min(camTween.t, 1));
+  camera.position.lerpVectors(camTween.camStart, camTween.camEnd, t);
+  controls.target.lerpVectors(camTween.targetStart, camTween.targetEnd, t);
+  if (camTween.t >= 1) camTween = null;
+}
+
+/* ═══════════════ RAYCASTING / CLIC ═══════════════ */
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let downPos = { x: 0, y: 0 };
-let isDragging = false;
+let pointerDown = false;
 
-renderer.domElement.addEventListener('pointerdown', (e) => {
+renderer.domElement.addEventListener('pointerdown', e => {
   downPos.x = e.clientX;
   downPos.y = e.clientY;
-  isDragging = false;
+  pointerDown = true;
 });
-renderer.domElement.addEventListener('pointermove', (e) => {
-  if (Math.abs(e.clientX - downPos.x) > 4 || Math.abs(e.clientY - downPos.y) > 4) {
-    isDragging = true;
-  }
-});
-renderer.domElement.addEventListener('pointerup', (e) => {
-  if (isDragging) return;
-  const rect = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!pointerDown) return;
+  pointerDown = false;
+  const dx = e.clientX - downPos.x;
+  const dy = e.clientY - downPos.y;
+  if (Math.hypot(dx, dy) > 6) return;
+  if (tourActive) return;
+
+  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(clickTargets, false);
-  for (const hit of hits) {
-    const id = hit.object.userData.bodyId;
-    if (id && bodies[id]) { selectBody(id, true); return; }
+  if (hits.length > 0) {
+    const id = hits[0].object.userData.bodyId;
+    if (id) focusBody(id, true);
   }
 });
 
-/* ═══════════════ CÁMARA: cancelar tracking al interactuar ═══════════════ */
-controls.addEventListener('start', () => {
-  if (travelAnim) { /* no cancelar viaje en curso */ }
-  trackingBody = null;
-  lastTrackedPos = null;
+/* ═══════════════ PANEL COLAPSABLE ═══════════════ */
+const panelEl = document.getElementById('panel');
+document.getElementById('btnTogglePanel').addEventListener('click', () => {
+  panelEl.classList.toggle('collapsed');
 });
 
-/* ═══════════════ ZOOM CONTROLS ═══════════════ */
-function zoomBy(factor) {
-  const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
-  const dist = dir.length();
-  const newDist = THREE.MathUtils.clamp(dist * factor, controls.minDistance, controls.maxDistance);
-  dir.setLength(newDist);
-  camera.position.copy(controls.target).add(dir);
-}
-document.getElementById('btnIn').onclick  = () => zoomBy(0.75);
-document.getElementById('btnOut').onclick = () => zoomBy(1.33);
-document.getElementById('btnHome').onclick = () => {
-  travelAnim = {
-    startPos: camera.position.clone(),
-    endPos: new THREE.Vector3(0, 1600, 2600),
-    startTarget: controls.target.clone(),
-    endTarget: new THREE.Vector3(0, 0, 0),
-    startTime: performance.now(),
-    duration: 1500,
-    onComplete: () => { trackingBody = null; lastTrackedPos = null; deselect(); }
-  };
-  selectedBodyId = null;
-  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-};
+/* ═══════════════ TOGGLES DE VISIBILIDAD ═══════════════ */
+document.getElementById('tglLabels').addEventListener('change', e => {
+  labelsVisible = e.target.checked;
+});
+document.getElementById('tglOrbits').addEventListener('change', e => {
+  const v = e.target.checked;
+  orbitLines.forEach(l => l.visible = v);
+});
+document.getElementById('tglBgStars').addEventListener('change', e => {
+  if (bgStarsObj) bgStarsObj.visible = e.target.checked;
+});
+document.getElementById('tglNebulae').addEventListener('change', e => {
+  nebulaeGroup.visible = e.target.checked;
+  for (const data of BODIES_DATA) {
+    if (data.isNebula) {
+      const b = bodies[data.id];
+      if (b && b.nebulaSprites) b.nebulaSprites.forEach(s => s.visible = e.target.checked);
+    }
+  }
+});
+document.getElementById('tglBloom').addEventListener('change', e => {
+  bloomPass.enabled = e.target.checked;
+});
 
-/* ═══════════════ TIME CONTROLS ═══════════════ */
-let paused = false;
+/* ═══════════════ TIEMPO ═══════════════ */
 let timeScale = 1;
+let paused = false;
 const timeScaleEl = document.getElementById('timeScale');
 const timeValueEl = document.getElementById('timeValue');
 const btnPause = document.getElementById('btnPause');
 
 timeScaleEl.addEventListener('input', () => {
   timeScale = parseFloat(timeScaleEl.value);
-  timeValueEl.textContent = timeScale.toFixed(1).replace(/\.0$/, '') + '×';
+  timeValueEl.textContent = timeScale.toFixed(1).replace('.0', '') + '×';
 });
 btnPause.addEventListener('click', () => {
   paused = !paused;
@@ -2332,88 +2334,88 @@ btnPause.addEventListener('click', () => {
   btnPause.textContent = paused ? '▶' : '⏸';
 });
 
-/* ═══════════════ TOGGLES DE VISIBILIDAD ═══════════════ */
-document.getElementById('tglLabels').addEventListener('change', (e) => {
-  labelsVisible = e.target.checked;
-  labelsContainer.style.display = labelsVisible ? '' : 'none';
-});
-document.getElementById('tglOrbits').addEventListener('change', (e) => {
-  orbitLines.forEach(l => l.visible = e.target.checked);
-});
-document.getElementById('tglBgStars').addEventListener('change', (e) => {
-  scene.traverse(o => { if (o.isPoints && o.material === bgStarsMat) o.visible = e.target.checked; });
-});
-document.getElementById('tglNebulae').addEventListener('change', (e) => {
-  nebulaeGroup.visible = e.target.checked;
-});
-document.getElementById('tglBloom').addEventListener('change', (e) => {
-  bloomPass.enabled = e.target.checked;
-});
+/* ═══════════════ ZOOM ═══════════════ */
+const btnIn = document.getElementById('btnIn');
+const btnOut = document.getElementById('btnOut');
+const btnHome = document.getElementById('btnHome');
 
-/* ═══════════════ COMPARTIR URL ═══════════════ */
-document.getElementById('btnShare').addEventListener('click', () => {
-  const url = location.href;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(() => toast('Enlace copiado al portapapeles'))
-      .catch(() => toast('No se pudo copiar el enlace'));
-  } else {
-    toast('Enlace: ' + url);
-  }
+btnIn.addEventListener('click', () => {
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  const dist = camera.position.distanceTo(controls.target);
+  const newDist = Math.max(controls.minDistance, dist * 0.7);
+  camera.position.copy(controls.target).add(dir.multiplyScalar(newDist));
+});
+btnOut.addEventListener('click', () => {
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  const dist = camera.position.distanceTo(controls.target);
+  const newDist = Math.min(controls.maxDistance, dist * 1.4);
+  camera.position.copy(controls.target).add(dir.multiplyScalar(newDist));
+});
+btnHome.addEventListener('click', () => {
+  camTween = {
+    t: 0, dur: 1.6,
+    camStart: camera.position.clone(),
+    camEnd: new THREE.Vector3(0, 1600, 2600),
+    targetStart: controls.target.clone(),
+    targetEnd: new THREE.Vector3(0, 0, 0)
+  };
+  hideInfo();
 });
 
 /* ═══════════════ TOUR GUIADO ═══════════════ */
-const TOUR_IDS = ['sun','mercury','venus','earth','mars','jupiter','saturn','uranus','neptune','pluto','sgra','andromeda'];
-let tourIndex = -1;
+const TOUR_IDS = ['sun', 'mercury', 'venus', 'earth', 'moon', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'andromeda', 'sgra', 'orion'];
+let tourActive = false;
+let tourIndex = 0;
 let tourTimer = null;
 const tourBanner = document.getElementById('tourBanner');
 const tourText = document.getElementById('tourText');
 
 function startTour() {
-  if (tourTimer) clearTimeout(tourTimer);
-  tourIndex = -1;
+  if (tourActive) return;
+  tourActive = true;
+  tourIndex = 0;
   tourBanner.classList.add('show');
-  nextTourStop();
+  nextTourStep();
 }
-
-function nextTourStop() {
-  tourIndex++;
-  if (tourIndex >= TOUR_IDS.length) { stopTour(); toast('Tour finalizado'); return; }
+function nextTourStep() {
+  if (!tourActive) return;
+  if (tourIndex >= TOUR_IDS.length) {
+    stopTour();
+    return;
+  }
   const id = TOUR_IDS[tourIndex];
-  const body = bodies[id];
-  if (!body) return nextTourStop();
-  tourText.textContent = `Tour · ${body.data.name} (${tourIndex + 1}/${TOUR_IDS.length})`;
-  selectBody(id, true);
-  tourTimer = setTimeout(() => {
-    if (travelAnim) tourTimer = setTimeout(nextTourStop, 1200);
-    else nextTourStop();
-  }, 5000);
+  const data = BODIES_DATA.find(b => b.id === id);
+  if (data) {
+    tourText.textContent = `Tour · ${data.name} (${tourIndex + 1}/${TOUR_IDS.length})`;
+    focusBody(id, true);
+  }
+  tourIndex++;
+  tourTimer = setTimeout(nextTourStep, 4200);
 }
-
 function stopTour() {
-  if (tourTimer) clearTimeout(tourTimer);
-  tourTimer = null;
-  tourIndex = -1;
+  tourActive = false;
   tourBanner.classList.remove('show');
+  if (tourTimer) { clearTimeout(tourTimer); tourTimer = null; }
 }
-
-document.getElementById('btnTour').addEventListener('click', () => {
-  if (tourTimer) stopTour();
-  else startTour();
-});
+document.getElementById('btnTour').addEventListener('click', startTour);
 document.getElementById('btnTour2').addEventListener('click', startTour);
 document.getElementById('tourStop').addEventListener('click', stopTour);
 
-/* ═══════════════ MODO FOTO ═══════════════ */
-let photoMode = false;
-function togglePhotoMode() {
-  photoMode = !photoMode;
-  document.body.classList.toggle('photo-mode', photoMode);
-  if (photoMode) toast('Modo foto · pulsa H para salir');
-}
+/* ═══════════════ COMPARTIR ═══════════════ */
+document.getElementById('btnShare').addEventListener('click', () => {
+  if (!selectedId) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set('body', selectedId);
+  navigator.clipboard.writeText(url.toString()).then(() => {
+    toast('Enlace copiado');
+  }).catch(() => {
+    toast(url.toString());
+  });
+});
 
 /* ═══════════════ TOASTS ═══════════════ */
 const toastsEl = document.getElementById('toasts');
-function toast(msg, duration = 2400) {
+function toast(msg) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = msg;
@@ -2422,221 +2424,148 @@ function toast(msg, duration = 2400) {
   setTimeout(() => {
     el.classList.remove('show');
     setTimeout(() => el.remove(), 300);
-  }, duration);
+  }, 2400);
 }
 
-/* ═══════════════ PANEL COLAPSO ═══════════════ */
-document.getElementById('btnTogglePanel').addEventListener('click', () => {
-  document.getElementById('panel').classList.toggle('collapsed');
-});
+/* ═══════════════ MODO FOTO ═══════════════ */
+let photoMode = false;
+function togglePhotoMode() {
+  photoMode = !photoMode;
+  document.body.classList.toggle('photo-mode', photoMode);
+}
 
-/* ═══════════════ ATAJOS DE TECLADO ═══════════════ */
-window.addEventListener('keydown', (e) => {
-  const tag = e.target.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') {
-    if (e.key === 'Escape') e.target.blur();
-    return;
-  }
-  if (e.key === ' ') {
-    e.preventDefault();
-    btnPause.click();
-  } else if (e.key === '+' || e.key === '=') {
-    zoomBy(0.75);
-  } else if (e.key === '-' || e.key === '_') {
-    zoomBy(1.33);
-  } else if (e.key === 'Escape') {
-    if (tourTimer) { stopTour(); return; }
-    if (photoMode) { togglePhotoMode(); return; }
-    deselect();
-  } else if (e.key === 'h' || e.key === 'H') {
-    togglePhotoMode();
-  } else if (e.key === 'g' || e.key === 'G') {
-    document.getElementById('btnHome').click();
-  } else if (e.key === 't' || e.key === 'T') {
-    if (tourTimer) stopTour(); else startTour();
-  } else if (e.key === '/') {
-    e.preventDefault();
-    searchEl.focus();
+/* ═══════════════ TECLADO ═══════════════ */
+window.addEventListener('keydown', e => {
+  if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  switch (e.key) {
+    case 'h': case 'H': togglePhotoMode(); break;
+    case 't': case 'T': tourActive ? stopTour() : startTour(); break;
+    case 'g': case 'G': btnHome.click(); break;
+    case '+': case '=': btnIn.click(); break;
+    case '-': case '_': btnOut.click(); break;
+    case ' ': {
+      e.preventDefault();
+      btnPause.click();
+      break;
+    }
+    case 'Escape': {
+      if (tourActive) stopTour();
+      else hideInfo();
+      break;
+    }
   }
 });
 
-/* ═══════════════ HINT AUTO-HIDE ═══════════════ */
+/* ═══════════════ HINT FADE ═══════════════ */
 setTimeout(() => {
-  const h = document.getElementById('hint');
-  if (h) h.classList.add('fade');
-}, 10000);
-
-/* ═══════════════ ESCALA HUD ═══════════════ */
-const scaleEl = document.getElementById('scale');
-let lastScaleText = '';
-function updateScaleHud() {
-  const d = camera.position.distanceTo(controls.target);
-  let text;
-  if (d < 5) text = `Distancia focal · ${d.toFixed(2)} u`;
-  else if (d < 50) text = `Sistema interior · ${d.toFixed(1)} u`;
-  else if (d < 500) text = `Sistema Solar · ${d.toFixed(0)} u`;
-  else if (d < 2000) text = `Nube exterior · ${(d / 100).toFixed(1)} × 100 u`;
-  else text = `Escala galáctica · ${(d / 1000).toFixed(1)} × 1000 u`;
-  if (text !== lastScaleText) {
-    scaleEl.textContent = text;
-    lastScaleText = text;
-  }
-}
-
-/* ═══════════════ ACTUALIZACIÓN DEL SOL EN LA TIERRA ═══════════════ */
-function updateEarthSunDir() {
-  const earth = bodies.earth;
-  if (!earth) return;
-  earth.mesh.getWorldPosition(_v);
-  const sunDir = _v.clone().negate().normalize();
-  for (const u of earthUniforms) {
-    if (u.sunDir) u.sunDir.value.copy(sunDir);
-  }
-}
+  document.getElementById('hint').classList.add('fade');
+}, 9000);
 
 /* ═══════════════ RESIZE ═══════════════ */
 window.addEventListener('resize', () => {
-  const w = window.innerWidth, h = window.innerHeight;
-  camera.aspect = w / h;
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
-  composer.setSize(w, h);
-  bloomPass.setSize(w, h);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  bloomPass.resolution.set(window.innerWidth, window.innerHeight);
 });
 
-/* ═══════════════ AUTO-CALIDAD ═══════════════ */
-const perf = { frames: 0, time: 0, lowered: false };
-function checkPerf(rawDelta) {
-  if (perf.lowered) return;
-  perf.frames++;
-  perf.time += rawDelta;
-  if (perf.time >= 3) {
-    const fps = perf.frames / perf.time;
-    if (fps < 30) {
-      renderer.setPixelRatio(1);
-      bloomPass.enabled = false;
-      document.getElementById('tglBloom').checked = false;
-      perf.lowered = true;
-      toast('Calidad reducida para mejorar el rendimiento');
-    }
-    perf.frames = 0;
-    perf.time = 0;
+/* ═══════════════ LOADER ═══════════════ */
+let loaderHidden = false;
+function maybeHideLoader() {
+  if (loaderHidden) return;
+  loaderHidden = true;
+  setLoader(100, 'Listo');
+  const loader = document.getElementById('loader');
+  setTimeout(() => loader.classList.add('hide'), 350);
+}
+
+/* ═══════════════ URL PARAMS ═══════════════ */
+(function checkUrlBody() {
+  const params = new URLSearchParams(window.location.search);
+  const bodyId = params.get('body');
+  if (bodyId) {
+    setTimeout(() => {
+      if (bodies[bodyId]) focusBody(bodyId, true);
+    }, 1500);
+  }
+})();
+
+/* ═══════════════ ANIMACIÓN ═══════════════ */
+const clock = new THREE.Clock();
+const sunDirVec = new THREE.Vector3();
+
+function updateSunDirection() {
+  const sun = bodies['sun'];
+  if (!sun) return;
+  sunDirVec.copy(sun._lastWorldPos).normalize();
+  for (const u of earthUniforms) {
+    if (u.sunDir) u.sunDir.value.copy(sunDirVec);
   }
 }
 
-/* ═══════════════ LOOP PRINCIPAL ═══════════════ */
-let lastTime = performance.now();
-let simTime = 0;
-let realTime = 0;
-let syncDone = false;
-
 function animate() {
-  const now = performance.now();
-  const rawDelta = (now - lastTime) / 1000;
-  lastTime = now;
-  const delta = Math.min(rawDelta, 0.1);
-  realTime += delta;
-  checkPerf(rawDelta);
-  if (!paused) simTime += delta * timeScale;
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.1);
+  const elapsed = clock.getElapsedTime();
+  const speed = paused ? 0 : timeScale;
 
   // Actualizar cuerpos
-  for (const body of Object.values(bodies)) {
-    body.update(simTime, delta, timeScale);
+  for (const id in bodies) {
+    const b = bodies[id];
+    b.update(dt, elapsed, speed);
   }
 
-  // Actualizar tails de cometas
-  for (const c of cometTails) c.updateTail();
-
-  // Actualizar uniforms de galaxia y fondo
+  // Galaxia procedural
   for (const m of galaxyMats) {
-    if (m.uniforms?.uTime) m.uniforms.uTime.value = simTime;
-  }
-  if (bgStarsMat.uniforms?.uTime) bgStarsMat.uniforms.uTime.value = realTime;
-
-  updateEarthSunDir();
-
-  // Cinturones
-  if (asteroidBelt) asteroidBelt.rotation.y = simTime * 0.02;
-  if (kuiperBelt) kuiperBelt.rotation.y = simTime * 0.005;
-
-  // Viaje de cámara
-  if (travelAnim) {
-    const t = Math.min(1, (now - travelAnim.startTime) / travelAnim.duration);
-    const e = easeInOutCubic(t);
-    camera.position.lerpVectors(travelAnim.startPos, travelAnim.endPos, e);
-    controls.target.lerpVectors(travelAnim.startTarget, travelAnim.endTarget, e);
-    if (t >= 1) {
-      if (travelAnim.onComplete) travelAnim.onComplete();
-      travelAnim = null;
-    }
+    m.uniforms.uTime.value = elapsed * (paused ? 0 : 0.4);
   }
 
-  // Seguimiento del cuerpo seleccionado si está en órbita
-  if (trackingBody && !travelAnim) {
-    const p = new THREE.Vector3();
-    trackingBody.mesh.getWorldPosition(p);
-    if (lastTrackedPos) {
-      const d = p.clone().sub(lastTrackedPos);
-      camera.position.add(d);
-      controls.target.add(d);
-    }
-    lastTrackedPos = p.clone();
+  // Fondo estelar
+  if (bgStarsMat) bgStarsMat.uniforms.uTime.value = elapsed;
+
+  // Dirección del Sol (para la Tierra)
+  updateSunDirection();
+
+  // Shaders especiales
+  for (const id in bodies) {
+    bodies[id].updateShader(elapsed);
   }
 
+  // Colas de cometas (orientadas al Sol)
+  for (const comet of cometTails) {
+    const worldPos = comet._lastWorldPos;
+    const dir = worldPos.clone().normalize();
+    const tail = comet.tail;
+    tail.position.copy(worldPos).add(dir.clone().multiplyScalar(comet.data.radius * 2));
+    tail.lookAt(worldPos.clone().add(dir));
+    const len = 4 + comet.data.radius * 20;
+    tail.scale.set(1, 1, len);
+  }
+
+  // Cámara tween
+  updateCamTween(dt);
+
+  // Controls
   controls.update();
-  updateLabels();
-  updateScaleHud();
-  updateSelectionRing(realTime);
 
+  // Etiquetas
+  updateLabels();
+
+  // Composer
   composer.render();
 }
 
-renderer.setAnimationLoop(animate);
-
-/* ═══════════════ BOOT: LEER URL Y CERRAR LOADER ═══════════════ */
-function maybeHideLoader() {
-  if (syncDone && texDone) {
-    setLoader(100, 'Listo');
-    setTimeout(() => document.getElementById('loader').classList.add('hide'), 400);
-  }
-}
-
-setLoader(95, 'Finalizando…');
-syncDone = true;
-// Si las texturas externas no cargan rápido, forzar cierre tras 6s
+/* ═══════════════ ARRANQUE ═══════════════ */
+setLoader(75, 'Preparando la cámara…');
 setTimeout(() => {
-  if (!document.getElementById('loader').classList.contains('hide')) {
-    texDone = true;
-    maybeHideLoader();
-  }
-}, 6000);
-maybeHideLoader();
-
-// Leer ?body= de la URL
-window.addEventListener('DOMContentLoaded', () => {});
+  setLoader(90, 'Alineando las estrellas…');
+}, 300);
 setTimeout(() => {
-  const params = new URLSearchParams(location.search);
-  const id = params.get('body');
-  if (id && bodies[id]) {
-    selectBody(id, false);
-    // Cámara directamente al cuerpo
-    const body = bodies[id];
-    setTimeout(() => {
-      const target = new THREE.Vector3();
-      body.mesh.getWorldPosition(target);
-      const endPos = computeTravelPosition(body);
-      camera.position.copy(endPos);
-      controls.target.copy(target);
-    }, 100);
-  }
-}, 600);
+  if (!texDone) { texDone = true; maybeHideLoader(); }
+}, 4000);
 
-/* ═══════════════ SERVICE WORKER (OPCIONAL) ═══════════════ */
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  });
-}
+animate();
 </script>
 </body>
 </html>
