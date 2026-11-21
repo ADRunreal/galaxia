@@ -48,8 +48,13 @@ select:focus-visible,
 
 .noscript-msg, .webgl-error {
   position: fixed; inset: 0; z-index: 200;
-  display: grid; place-items: center; text-align: center;
+  place-items: center; text-align: center;
   padding: 24px; background: var(--bg); color: var(--text);
+}
+
+.noscript-msg:not([hidden]),
+.webgl-error:not([hidden]) {
+  display: grid;
 }
 .noscript-msg h1, .webgl-error h1 { font-size: 22px; margin-bottom: 12px; color: var(--text-bright); }
 .noscript-msg p, .webgl-error p { font-size: 14px; line-height: 1.6; max-width: 480px; margin-bottom: 16px; color: var(--text-dim); }
