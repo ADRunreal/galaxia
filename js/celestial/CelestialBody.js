@@ -385,7 +385,12 @@ export class CelestialBody {
   }
 
   updatePosition(simDays) {
-    if (!this.parentBody || this.id === 'sun') return;
+    // El Sol está en el centro, no orbita
+    if (this.id === 'sun') {
+      this.pivot.position.set(0, 0, 0);
+      return;
+    }
+    if (!this.parentBody) return;
     if (this.periodDays === 0) return;
 
     const M = this.M0 + TAU * (simDays / this.periodDays);
@@ -571,6 +576,7 @@ export function createAllBodies(bodiesData, solarSystem) {
     const body = new CelestialBody(data, parent);
 
     if (!parent) {
+      // Solo los cuerpos sin padre van al grupo del sistema solar
       solarSystem.add(body.pivot);
     }
 
