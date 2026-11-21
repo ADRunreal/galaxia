@@ -428,6 +428,9 @@ function initKeyboard() {
       case 'm': case 'M':
         toggleAmbientAudio();
         break;
+      case 'c': case 'C':
+        toggleCinemaMode();
+        break;
       case 'r': case 'R':
         // Añadir atajo para resetear el tiempo
         simTimeDays = 0;
@@ -437,6 +440,29 @@ function initKeyboard() {
 }
 
 /* ═══════════════ PHOTO MODE ═══════════════ */
+let cinemaInterval = null;
+let cinemaIndex = 0;
+const CINEMA_TOUR = ['sun', 'earth', 'jupiter', 'saturn', 'orion', 'andromeda', 'sgra', 'betelgeuse'];
+
+function toggleCinemaMode() {
+  const btn = document.getElementById('btnCinema');
+  if (cinemaInterval) {
+    clearInterval(cinemaInterval);
+    cinemaInterval = null;
+    if (btn) btn.classList.remove('active');
+    showToast('Modo película detenido');
+  } else {
+    if (btn) btn.classList.add('active');
+    showToast('🎬 Modo película iniciado. La cámara viajará automáticamente.');
+    cinemaIndex = 0;
+    flyToBody(CINEMA_TOUR[0]);
+    cinemaInterval = setInterval(() => {
+      cinemaIndex = (cinemaIndex + 1) % CINEMA_TOUR.length;
+      flyToBody(CINEMA_TOUR[cinemaIndex]);
+    }, 8000);
+  }
+}
+
 function togglePhotoMode() {
   const isPhoto = document.body.classList.toggle('photo-mode');
   const wm = document.getElementById('photoBodyName');
