@@ -71,6 +71,7 @@ function nextStop() {
   // P0/1.8: si llegamos al final, DETENER
   if (index >= TOUR_BODIES.length) {
     stopTour();
+    // Hacer que el tour sea infinito si se desea, o detenerse. Lo mantenemos detenido.
     return;
   }
   const id = TOUR_BODIES[index];

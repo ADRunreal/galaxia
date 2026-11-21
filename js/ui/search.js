@@ -65,6 +65,7 @@ function buildCatalog(bodiesData, onSelectBody) {
       btn.className = 'cat-btn';
       btn.dataset.id = data.id;
       btn.dataset.name = norm(data.name);
+      btn.dataset.type = norm(data.type);
       btn.dataset.rawName = data.name;
       btn.type = 'button';
       btn.setAttribute('role', 'listitem');
@@ -101,7 +102,7 @@ function applyFilters() {
     const buttons = group.querySelectorAll('.cat-btn');
 
     for (const btn of buttons) {
-      const nameMatch = !q || btn.dataset.name.includes(q);
+      const nameMatch = !q || btn.dataset.name.includes(q) || (btn.dataset.type || '').toLowerCase().includes(q);
       // P2: comparar categorías normalizadas
       const catMatch = cat === 'all' || norm(cat) === norm(c);
 

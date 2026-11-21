@@ -401,6 +401,10 @@ function initKeyboard() {
         if (isTourActive()) stopTour();
         if (document.body.classList.contains('photo-mode')) togglePhotoMode();
         break;
+      case 'r': case 'R':
+        // Añadir atajo para resetear el tiempo
+        simTimeDays = 0;
+        break;
     }
   });
 }
@@ -412,6 +416,11 @@ function togglePhotoMode() {
   if (isPhoto) {
     const id = getSelectedId();
     wm.textContent = id && bodies[id] ? bodies[id].data.name : '';
+    // Ocultar el loader por si acaso
+    document.getElementById('loader')?.classList.add('hide');
+  } else {
+    // Al salir del modo foto, asegurarse de que el cuerpo seleccionado siga resaltado
+    setSelectedLabel(getSelectedId());
   }
 }
 
