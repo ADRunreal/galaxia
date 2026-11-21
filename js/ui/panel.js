@@ -11,7 +11,8 @@ export function initPanel({
   onBgStarsToggle,
   onNebulaeToggle,
   onBloomToggle,
-  onQualityToggle
+  onQualityToggle,
+  onConstellationsToggle
 }) {
   const panelEl = document.getElementById('panel');
   const btnToggle = document.getElementById('btnTogglePanel');
@@ -28,6 +29,7 @@ export function initPanel({
   const tglNebulae = document.getElementById('tglNebulae');
   const tglBloom = document.getElementById('tglBloom');
   const tglQuality = document.getElementById('tglQuality');
+  const tglConstellations = document.getElementById('tglConstellations');
 
   tglLabels?.addEventListener('change', e => onLabelsToggle(e.target.checked));
   tglOrbits?.addEventListener('change', e => onOrbitsToggle(e.target.checked));
@@ -35,6 +37,7 @@ export function initPanel({
   tglNebulae?.addEventListener('change', e => onNebulaeToggle(e.target.checked));
   tglBloom?.addEventListener('change', e => onBloomToggle(e.target.checked));
   tglQuality?.addEventListener('change', e => onQualityToggle?.(e.target.checked));
+  tglConstellations?.addEventListener('change', e => onConstellationsToggle?.(e.target.checked));
 
   return {
     setBloomChecked: (v) => { if (tglBloom) tglBloom.checked = v; }

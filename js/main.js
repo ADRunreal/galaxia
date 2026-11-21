@@ -47,6 +47,7 @@ import { initInfo, selectBody, getSelectedId, shareBodyLink, shareCurrentView } 
 import { initTour, startTour, stopTour, isTourActive, updateTour } from './ui/tour.js';
 import { initToasts, showToast } from './ui/toasts.js';
 import { toggleAmbientAudio } from './ui/audio.js';
+import { createConstellations } from './ui/constellations.js';
 
 /* ═══════════════ ESTADO GLOBAL ═══════════════ */
 let scene, camera, controls, renderer, composer;
@@ -175,6 +176,15 @@ async function init() {
       onBloomToggle: (v) => setBloomEnabled(v),
       onQualityToggle: () => { /* placeholder */ }
     ,
+    onConstellationsToggle: (v) => {
+      scene.traverse(obj => {
+        if (obj.name === 'constellations') obj.visible = v;
+      });
+      // Ocultar etiquetas de constelaciones
+      document.querySelectorAll('[data-constellation]').forEach(el => {
+        el.style.display = v ? 'block' : 'none';
+      });
+    },
     onScaleToggle: (isReal) => {
       import('./config.js').then(cfg => {
         window.__galaxiaConfig = cfg;
