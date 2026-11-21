@@ -98,7 +98,7 @@ export const CLOUD_FRAG = `
     float ndl = dot(normalize(vNormalW), uSunDir);
     float day = smoothstep(-0.15, 0.25, ndl);
     vec3 col = vec3(1.0) * (0.06 + 0.94 * day);
-    gl_FragColor = vec4(col, a * 0.78);
+    gl_FragColor = vec4(col, a * 0.45);
   }
 `;
 

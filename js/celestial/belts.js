@@ -82,7 +82,7 @@ export function buildKuiperBelt(scene) {
 
   for (let i = 0; i < N; i++) {
     const i3 = i * 3;
-    const r = 118 + Math.random() * 70 + gauss() * 2;
+    const r = 180 + Math.random() * 80 + gauss() * 2;
     const a = Math.random() * TAU;
     pos[i3] = Math.cos(a) * r;
     pos[i3 + 1] = gauss() * 3;
@@ -96,7 +96,7 @@ export function buildKuiperBelt(scene) {
     color: 0x7a90c4,
     size: 0.35,
     transparent: true,
-    opacity: 0.4,
+    opacity: 0.15,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     sizeAttenuation: true

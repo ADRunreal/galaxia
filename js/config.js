@@ -33,7 +33,7 @@ export const CAMERA_CFG = {
   fov: 50,
   near: 0.05,
   far: 60000,
-  initialPosition: { x: 0, y: 900, z: 1500 },
+  initialPosition: { x: 0, y: 1200, z: 2000 },
   minDistance: 0.3,
   maxDistance: 30000,
   dampingFactor: 0.065,
@@ -73,8 +73,8 @@ export const TOUR_BODIES = [
 /* Distancia de vista por tipo de cuerpo */
 export const VIEW_DISTANCE = {
   star: 200,
-  planet: 8,
-  moon: 3,
+  planet: 12,
+  moon: 4,
   dwarf: 4,
   asteroid: 2,
   comet: 2,
