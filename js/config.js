@@ -36,7 +36,7 @@ export const CAMERA_CFG = {
   initialPosition: { x: 0, y: 1200, z: 2000 },
   minDistance: 0.3,
   maxDistance: 30000,
-  dampingFactor: 0.065,
+  dampingFactor: 0.04,
   rotateSpeed: 0.5,
   zoomSpeed: 0.85,
   panSpeed: 0.6

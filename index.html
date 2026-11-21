@@ -122,11 +122,15 @@
   <span>Velocidad</span>
   <input id="timeScale" type="range" min="0" max="10" step="0.05" value="1" aria-label="Velocidad del tiempo" />
   <span id="timeValue">1×</span>
+  <div id="astroClock" style="margin-left: 12px; padding-left: 12px; border-left: 1px solid rgba(110,160,240,0.2); font-variant-numeric: tabular-nums; color: var(--accent); font-size: 10px; letter-spacing: 0.05em;">
+    <span id="clockDate">2000-01-01</span> <span id="clockTime">12:00</span>
+  </div>
 </div>
 
 <!-- Controles de zoom -->
 <div id="zoomControls">
   <button id="btnTour" title="Tour guiado (T)" aria-label="Tour guiado">▶</button>
+  <button id="btnResetTime" title="Resetear tiempo (R)" aria-label="Resetear tiempo">⟲</button>
   <button id="btnHome" title="Vista global (G)" aria-label="Vista global">⌂</button>
   <button id="btnIn" title="Acercar (+)" aria-label="Acercar">+</button>
   <button id="btnOut" title="Alejar (−)" aria-label="Alejar">−</button>

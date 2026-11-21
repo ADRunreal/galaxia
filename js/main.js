@@ -530,6 +530,24 @@ function animate() {
   // Etiquetas
   updateLabels(camera);
 
+  // Reloj astronómico: convertir simTimeDays a fecha real
+  const clockDate = document.getElementById('clockDate');
+  const clockTime = document.getElementById('clockTime');
+  if (clockDate && clockTime) {
+    // La simulación empieza en J2000 = 2000-01-01 12:00 UTC
+    const J2000 = Date.UTC(2000, 0, 1, 12, 0, 0);
+    const msPerDay = 86400000;
+    const currentMs = J2000 + simTimeDays * msPerDay;
+    const d = new Date(currentMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const hours = String(d.getUTCHours()).padStart(2, '0');
+    const mins = String(d.getUTCMinutes()).padStart(2, '0');
+    clockDate.textContent = `${year}-${month}-${day}`;
+    clockTime.textContent = `${hours}:${mins}`;
+  }
+
   // Ocultar hint
   if (!hintHidden && realTimeSeconds > 8) {
     const hint = document.getElementById('hint');
