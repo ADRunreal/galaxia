@@ -62,172 +62,185 @@ let raycaster, pointer;
 let pointerDown = { x: 0, y: 0, t: 0 };
 let ready = false;
 
-/* ═══════════════ INIT ═══════════════ */
 async function init() {
-  // ─── i18n ───
-  await initI18n();
+  try {
+    // ─── i18n ───
+    await initI18n();
+    console.log('[Galaxia] ✅ Step 1: i18n OK');
 
-  // ─── Renderer (con fallback) ───
-  renderer = createRenderer();
-  if (!renderer) return; // fallback ya mostrado
-
-  // ─── Cámara ───
-  const camResult = createCamera(renderer);
-  camera = camResult.camera;
-  controls = camResult.controls;
-
-  // ─── Escena ───
-  scene = createScene();
-
-  // ─── Postprocesado ───
-  const pp = createComposer(renderer, scene, camera);
-  composer = pp.composer;
-
-  // ─── Texturas ───
-  setLoader(5, 'Generando texturas…');
-  await nextFrame();
-  textureBundle = await generateAllTextures((pct, label) => setLoader(pct, label));
-  setSharedTextures(textureBundle);
-
-  // ─── Datos de cuerpos ───
-  setLoader(90, 'Cargando datos…');
-  await nextFrame();
-  const res = await fetch('./js/data/bodies.json');
-  planetData = await res.json();
-
-  // ─── Sistema Solar ───
-  setLoader(92, 'Construyendo el Sistema Solar…');
-  await nextFrame();
-  solarSystem = new THREE.Group();
-  scene.add(solarSystem);
-  createAllBodies(planetData, solarSystem);
-
-  // ─── Órbitas ───
-  setLoader(94, 'Trazando órbitas…');
-  await nextFrame();
-  for (const id in bodies) {
-    const body = bodies[id];
-    if (!body.parentBody || id === 'sun') continue;
-    const line = createOrbitLine(body);
-    orbitLines.push(line);
-    if (body.parentBody.id === 'sun') {
-      solarSystem.add(line);
-    } else {
-      body.parentBody.pivot.add(line);
+    // ─── Renderer ───
+    renderer = createRenderer();
+    if (!renderer) {
+      console.warn('[Galaxia] ⚠️ renderer null, abortando init()');
+      return;
     }
-  }
+    console.log('[Galaxia] ✅ Step 2: renderer OK');
 
-  // ─── Cinturones ───
-  setLoader(96, 'Cinturones de asteroides…');
-  await nextFrame();
-  buildAsteroidBelt(scene);
-  buildKuiperBelt(scene);
+    // ─── Cámara ───
+    const camResult = createCamera(renderer);
+    camera = camResult.camera;
+    controls = camResult.controls;
+    console.log('[Galaxia] ✅ Step 3: camera OK');
 
-  // ─── Etiquetas ───
-  initLabels();
+    // ─── Escena ───
+    scene = createScene();
+    console.log('[Galaxia] ✅ Step 4: scene OK');
 
-  // ─── UI ───
-  setLoader(97, 'Preparando interfaz…');
-  await nextFrame();
-  initToasts();
-  initInfo();
+    // ─── Postprocesado ───
+    const pp = createComposer(renderer, scene, camera);
+    composer = pp.composer;
+    console.log('[Galaxia] ✅ Step 5: composer OK');
 
-  initPanel({
-    onLabelsToggle: (v) => setLabelsEnabled(v),
-    onOrbitsToggle: (v) => orbitLines.forEach(l => l.visible = v),
-    onBgStarsToggle: (v) => setBgStarsVisible(v),
-    onNebulaeToggle: (v) => setNebulaeVisible(v),
-    onBloomToggle: (v) => setBloomEnabled(v),
-    onQualityToggle: () => { /* placeholder para futuras mejoras */ }
-  });
+    // ─── Texturas ───
+    setLoader(5, 'Generando texturas…');
+    await nextFrame();
+    console.log('[Galaxia] 🎨 Generando texturas…');
+    textureBundle = await generateAllTextures((pct, label) => setLoader(pct, label));
+    setSharedTextures(textureBundle);
+    console.log('[Galaxia] ✅ Step 6: texturas OK');
 
-  // ─── Búsqueda ───
-  const search = initSearch((id) => flyToBody(id));
-  search.buildCatalog(planetData);
+    // ─── Datos ───
+    setLoader(90, 'Cargando datos…');
+    await nextFrame();
+    console.log('[Galaxia] 📡 Cargando bodies.json…');
+    const res = await fetch('./js/data/bodies.json');
+    if (!res.ok) throw new Error(`No se pudo cargar bodies.json (HTTP ${res.status})`);
+    planetData = await res.json();
+    console.log('[Galaxia] ✅ Step 7: bodies.json OK (' + planetData.length + ' cuerpos)');
 
-  // ─── Tour ───
-  initTour((id) => flyToBody(id));
+    // ─── Sistema Solar ───
+    setLoader(92, 'Construyendo el Sistema Solar…');
+    await nextFrame();
+    solarSystem = new THREE.Group();
+    scene.add(solarSystem);
+    createAllBodies(planetData, solarSystem);
+    console.log('[Galaxia] ✅ Step 8: cuerpos creados');
 
-  // ─── Compartir ───
-  document.getElementById('btnShare').addEventListener('click', shareBodyLink);
-  document.getElementById('btnShareView').addEventListener('click', () => {
-    shareCurrentView(
-      camera.position,
-      controls.target,
-      simTimeDays,
-      getSelectedId()
-    );
-  });
+    // ─── Órbitas ───
+    setLoader(94, 'Trazando órbitas…');
+    await nextFrame();
+    for (const id in bodies) {
+      const body = bodies[id];
+      if (!body.parentBody || id === 'sun') continue;
+      const line = createOrbitLine(body);
+      orbitLines.push(line);
+      if (body.parentBody.id === 'sun') {
+        solarSystem.add(line);
+      } else {
+        body.parentBody.pivot.add(line);
+      }
+    }
+    console.log('[Galaxia] ✅ Step 9: órbitas OK');
 
-  // ─── Control de tiempo ───
-  initTimeControls();
+    // ─── Cinturones ───
+    setLoader(96, 'Cinturones de asteroides…');
+    await nextFrame();
+    buildAsteroidBelt(scene);
+    buildKuiperBelt(scene);
+    console.log('[Galaxia] ✅ Step 10: cinturones OK');
 
-  // ─── Zoom ───
-  document.getElementById('btnIn').addEventListener('click', () => zoomBy(0.6, bodies));
-  document.getElementById('btnOut').addEventListener('click', () => zoomBy(1.65, bodies));
-  document.getElementById('btnHome').addEventListener('click', () => {
-    goHome();
-  });
-  document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
-  document.getElementById('btnHelp').addEventListener('click', showHelp);
+    // ─── Etiquetas ───
+    initLabels();
+    console.log('[Galaxia] ✅ Step 11: etiquetas OK');
 
-  // ─── Raycast ───
-  initRaycast();
+    // ─── UI ───
+    setLoader(97, 'Preparando interfaz…');
+    await nextFrame();
+    initToasts();
+    initInfo();
 
-  // ─── Teclado ───
-  initKeyboard();
-
-  // ─── Resize ───
-  window.addEventListener('resize', onResize);
-
-  // ─── beforeunload ───
-  window.addEventListener('beforeunload', cleanup);
-
-  // ─── Service Worker ───
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(err => {
-      console.warn('SW registration failed:', err);
+    initPanel({
+      onLabelsToggle: (v) => setLabelsEnabled(v),
+      onOrbitsToggle: (v) => orbitLines.forEach(l => l.visible = v),
+      onBgStarsToggle: (v) => setBgStarsVisible(v),
+      onNebulaeToggle: (v) => setNebulaeVisible(v),
+      onBloomToggle: (v) => setBloomEnabled(v),
+      onQualityToggle: () => { /* placeholder */ }
     });
-  }
 
-  // ─── Clock ───
-  clock = new THREE.Clock();
+    const search = initSearch((id) => flyToBody(id));
+    search.buildCatalog(planetData);
+    initTour((id) => flyToBody(id));
+    console.log('[Galaxia] ✅ Step 12: UI OK');
 
-  // ─── Deep link ───
-  const urlParams = new URLSearchParams(location.search);
-  const deepBody = urlParams.get('body');
-  const cam = urlParams.get('cam');
-  const target = urlParams.get('target');
-  const timeParam = urlParams.get('t');
+    // ─── Compartir ───
+    document.getElementById('btnShare').addEventListener('click', shareBodyLink);
+    document.getElementById('btnShareView').addEventListener('click', () => {
+      shareCurrentView(camera.position, controls.target, simTimeDays, getSelectedId());
+    });
 
-  if (timeParam) {
-    const tv = parseFloat(timeParam);
-    if (isFinite(tv)) simTimeDays = tv;
-  }
+    // ─── Control de tiempo ───
+    initTimeControls();
 
-  if (cam && target) {
-    const [cx, cy, cz] = cam.split(',').map(Number);
-    const [tx, ty, tz] = target.split(',').map(Number);
-    if ([cx, cy, cz, tx, ty, tz].every(isFinite)) {
-      camera.position.set(cx, cy, cz);
-      controls.target.set(tx, ty, tz);
+    // ─── Zoom ───
+    document.getElementById('btnIn').addEventListener('click', () => zoomBy(0.6, bodies));
+    document.getElementById('btnOut').addEventListener('click', () => zoomBy(1.65, bodies));
+    document.getElementById('btnHome').addEventListener('click', () => goHome());
+    document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
+    document.getElementById('btnHelp').addEventListener('click', showHelp);
+
+    // ─── Raycast ───
+    initRaycast();
+
+    // ─── Teclado ───
+    initKeyboard();
+
+    // ─── Resize ───
+    window.addEventListener('resize', onResize);
+
+    // ─── beforeunload ───
+    window.addEventListener('beforeunload', cleanup);
+
+    // ─── Service Worker ───
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(err => {
+        console.warn('[Galaxia] SW registration failed:', err);
+      });
     }
-  } else if (deepBody && bodies[deepBody]) {
-    // Defer flyTo hasta que el loader termine
-    setTimeout(() => flyToBody(deepBody), 800);
+
+    // ─── Clock ───
+    clock = new THREE.Clock();
+
+    // ─── Deep link ───
+    const urlParams = new URLSearchParams(location.search);
+    const deepBody = urlParams.get('body');
+    const cam = urlParams.get('cam');
+    const target = urlParams.get('target');
+    const timeParam = urlParams.get('t');
+
+    if (timeParam) {
+      const tv = parseFloat(timeParam);
+      if (isFinite(tv)) simTimeDays = tv;
+    }
+
+    if (cam && target) {
+      const [cx, cy, cz] = cam.split(',').map(Number);
+      const [tx, ty, tz] = target.split(',').map(Number);
+      if ([cx, cy, cz, tx, ty, tz].every(isFinite)) {
+        camera.position.set(cx, cy, cz);
+        controls.target.set(tx, ty, tz);
+      }
+    } else if (deepBody && bodies[deepBody]) {
+      setTimeout(() => flyToBody(deepBody), 800);
+    }
+
+    // ─── Onboarding ───
+    maybeShowOnboarding();
+
+    // ─── Listo ───
+    setLoader(100, 'Listo');
+    await nextFrame();
+    document.getElementById('loader').classList.add('hide');
+    ready = true;
+    console.log('[Galaxia] 🚀 ¡Todo listo! Arrancando loop…');
+
+    // ─── Loop ───
+    animate();
+
+  } catch (err) {
+    console.error('[Galaxia] ❌ FALLÓ init() en algún paso');
+    throw err; // se captura en el catch global
   }
-
-  // ─── Onboarding ───
-  maybeShowOnboarding();
-
-  // ─── Listo ───
-  setLoader(100, 'Listo');
-  await nextFrame();
-  document.getElementById('loader').classList.add('hide');
-  ready = true;
-
-  // ─── Loop ───
-  animate();
 }
 
 /* ═══════════════ TIEMPO ═══════════════ */
