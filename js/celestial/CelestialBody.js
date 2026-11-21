@@ -203,6 +203,25 @@ export class CelestialBody {
     this.atmoMat = createAtmosphereMaterial();
     this.atmosphere = new THREE.Mesh(atmoGeo, this.atmoMat);
     this.tiltGroup.add(this.atmosphere);
+    
+    // Aurora boreal (anillo brillante en el polo norte)
+    this._addAurora(r);
+  }
+  
+  _addAurora(planetRadius) {
+    const auroraGeo = new THREE.RingGeometry(planetRadius * 0.7, planetRadius * 0.95, 64, 1);
+    const auroraMat = new THREE.MeshBasicMaterial({
+      color: 0x00ff88,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    this.aurora = new THREE.Mesh(auroraGeo, auroraMat);
+    this.aurora.rotation.x = Math.PI / 2;
+    this.aurora.position.y = planetRadius * 0.85;
+    this.tiltGroup.add(this.aurora);
   }
 
   _addSaturnRings() {
@@ -255,20 +274,37 @@ export class CelestialBody {
 
   _addCometTail() {
     const r = this.data.radius;
-    const geo = new THREE.ConeGeometry(r * 1.1, 1, 8, 1, true);
-    geo.rotateX(Math.PI / 2);
-    geo.translate(0, 0, 0.5);
-    const mat = new THREE.MeshBasicMaterial({
-      color: parseColor(this.data.color),
+    // Cola de iones (azul, recta, apunta lejos del Sol)
+    const ionGeo = new THREE.ConeGeometry(r * 0.8, 1, 8, 1, true);
+    ionGeo.rotateX(Math.PI / 2);
+    ionGeo.translate(0, 0, 0.5);
+    const ionMat = new THREE.MeshBasicMaterial({
+      color: 0x88ccff,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.5,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide
     });
-    this.tail = new THREE.Mesh(geo, mat);
-    this.pivot.add(this.tail);
+    this.ionTail = new THREE.Mesh(ionGeo, ionMat);
+    this.pivot.add(this.ionTail);
+    
+    // Cola de polvo (blanca, curvada)
+    const dustGeo = new THREE.ConeGeometry(r * 1.2, 1, 8, 1, true);
+    dustGeo.rotateX(Math.PI / 2);
+    dustGeo.translate(0, 0, 0.5);
+    const dustMat = new THREE.MeshBasicMaterial({
+      color: 0xffeecc,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    this.dustTail = new THREE.Mesh(dustGeo, dustMat);
+    this.pivot.add(this.dustTail);
 
+    // Coma (el halo brillante alrededor del núcleo)
     const c = parseColor(this.data.color);
     const tex = makeGlowTexture(
       'rgba(255,255,255,1)',
@@ -283,7 +319,7 @@ export class CelestialBody {
       blending: THREE.AdditiveBlending,
       depthWrite: false
     }));
-    this.coma.scale.setScalar(r * 5);
+    this.coma.scale.setScalar(r * 6);
     this.tiltGroup.add(this.coma);
   }
 
