@@ -71,6 +71,10 @@ export const TOUR_BODIES = [
 ];
 
 /* Distancia de vista por tipo de cuerpo */
+// Factor para escala real. En modo real, los planetas son 1/10 de su tamaño visual
+// y las distancias orbitales se multiplican para reflejar la realidad (aprox).
+export const REAL_SCALE_FACTOR = 0.15; 
+export const REAL_DISTANCE_FACTOR = 4.0;
 export const VIEW_DISTANCE = {
   star: 400,
   planet: 12,

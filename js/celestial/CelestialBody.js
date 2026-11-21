@@ -68,6 +68,11 @@ export class CelestialBody {
     this.M0 = (hashString(data.id + 'M') % 6283) / 1000;
     this.periodDays = data.periodDays || 365.25;
     this.rotationDays = data.rotationDays || 0;
+    
+    // Guardar valores originales para el switch de escala
+    this.originalRadius = data.radius;
+    this.originalA = data.orbitRadius || 0;
+    this.realScaleApplied = false;
 
     this._createMesh();
     this._createHitbox();
@@ -487,6 +492,34 @@ export class CelestialBody {
     const camDir = camera.getWorldDirection(new THREE.Vector3());
     const toBody = this._lastWorldPos.clone().sub(camera.position);
     return toBody.dot(camDir) < 0;
+  }
+
+  /**
+   * Aplica modo de escala visual o real.
+   * @param {boolean} isReal
+   */
+  applyScaleMode(isReal) {
+    if (this.realScaleApplied === isReal) return;
+    this.realScaleApplied = isReal;
+    
+    const { REAL_SCALE_FACTOR, REAL_DISTANCE_FACTOR } = window.__galaxiaConfig || { REAL_SCALE_FACTOR: 0.15, REAL_DISTANCE_FACTOR: 4.0 };
+
+    if (isReal) {
+      // Reducir tamaño de los planetas y aumentar distancias
+      const newRadius = this.originalRadius * REAL_SCALE_FACTOR;
+      this.mesh.scale.setScalar(REAL_SCALE_FACTOR);
+      if (this.clouds) this.clouds.scale.setScalar(REAL_SCALE_FACTOR);
+      if (this.atmosphere) this.atmosphere.scale.setScalar(REAL_SCALE_FACTOR);
+      if (this.ring) this.ring.scale.setScalar(REAL_SCALE_FACTOR);
+      this.a = this.originalA * REAL_DISTANCE_FACTOR;
+    } else {
+      // Restaurar escala visual
+      this.mesh.scale.setScalar(1);
+      if (this.clouds) this.clouds.scale.setScalar(1);
+      if (this.atmosphere) this.atmosphere.scale.setScalar(1);
+      if (this.ring) this.ring.scale.setScalar(1);
+      this.a = this.originalA;
+    }
   }
 
   dispose() {
