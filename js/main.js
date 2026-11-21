@@ -46,6 +46,7 @@ import { initSearch, setActiveCatalogItem } from './ui/search.js';
 import { initInfo, selectBody, getSelectedId, shareBodyLink, shareCurrentView } from './ui/info.js';
 import { initTour, startTour, stopTour, isTourActive, updateTour } from './ui/tour.js';
 import { initToasts, showToast } from './ui/toasts.js';
+import { toggleAmbientAudio } from './ui/audio.js';
 
 /* ═══════════════ ESTADO GLOBAL ═══════════════ */
 let scene, camera, controls, renderer, composer;
@@ -413,6 +414,9 @@ function initKeyboard() {
       case 'Escape':
         if (isTourActive()) stopTour();
         if (document.body.classList.contains('photo-mode')) togglePhotoMode();
+        break;
+      case 'm': case 'M':
+        toggleAmbientAudio();
         break;
       case 'r': case 'R':
         // Añadir atajo para resetear el tiempo
