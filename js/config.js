@@ -5,7 +5,7 @@ export const IS_MOBILE = isMobile();
 export const LOW_POWER = isLowPower();
 
 /* Escala temporal base (días simulados por segundo real) */
-export const BASE_RATE = 1.0;
+export const BASE_RATE = 0.5; // 0.5 días por segundo
 
 /* Configuración de la galaxia procedural */
 export const GALAXY_CFG = {
@@ -72,7 +72,7 @@ export const TOUR_BODIES = [
 
 /* Distancia de vista por tipo de cuerpo */
 export const VIEW_DISTANCE = {
-  star: 200,
+  star: 400,
   planet: 12,
   moon: 4,
   dwarf: 4,
