@@ -506,16 +506,32 @@ function animate() {
 
 /* ═══════════════ ARRANCAR ═══════════════ */
 init().catch(err => {
-  console.error('Init error:', err);
+  console.error('[Galaxia] ❌ Init error:', err);
+  console.error('[Galaxia] Stack:', err.stack);
+
+  // Mostrar el error en el loader
   setLoader(100, 'Error de inicialización');
+
+  // NO mostrar "WebGL no soportado" — mostrar el error real
   const loader = document.getElementById('loader');
-  if (loader) loader.classList.add('hide');
-  const errEl = document.getElementById('webglError');
-  if (errEl) {
-    errEl.hidden = false;
-    const h1 = errEl.querySelector('h1');
-    const p = errEl.querySelector('p');
-    if (h1) h1.textContent = 'No se pudo iniciar';
-    if (p) p.textContent = 'Recarga la página o prueba con otro navegador. ' + (err.message || '');
+  if (loader) {
+    loader.classList.remove('hide');
+    loader.innerHTML = `
+      <div style="text-align:center;padding:24px;max-width:600px;color:#d4e2ff;font-family:ui-sans-serif,system-ui,sans-serif;">
+        <h1 style="color:#ff6644;font-size:20px;margin-bottom:16px;">Error al iniciar el Explorador Galáctico</h1>
+        <p style="color:#9db4dd;font-size:14px;line-height:1.6;margin-bottom:16px;">
+          ${escapeHtml(err.message || 'Error desconocido')}
+        </p>
+        <pre style="background:rgba(0,0,0,0.5);padding:16px;border-radius:8px;text-align:left;overflow:auto;font-size:11px;color:#ff9966;max-height:300px;white-space:pre-wrap;">${escapeHtml((err.stack || '').slice(0, 2000))}</pre>
+        <button onclick="location.reload()" style="margin-top:16px;padding:10px 20px;background:rgba(91,140,255,0.35);border:1px solid rgba(91,140,255,0.55);border-radius:8px;color:#fff;cursor:pointer;font-size:13px;">Volver a cargar</button>
+      </div>
+    `;
   }
 });
+
+// Helper para escapar HTML
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
