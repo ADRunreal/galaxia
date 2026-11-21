@@ -21,12 +21,20 @@ export function createRenderer() {
   if (renderer) return renderer;
 
   let canvasEl = null;
+  
+  // ─── Comprobación de WebGL con diagnóstico ───
+  let gl = null;
   try {
-    // Comprobación previa de WebGL (evita excepciones feas)
     const testCanvas = document.createElement('canvas');
-    const gl = testCanvas.getContext('webgl2') || testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
-    if (!gl) throw new Error('WebGL no disponible');
+    gl = testCanvas.getContext('webgl2') || testCanvas.getContext('webgl');
+    if (!gl) {
+      console.error('[Galaxia] WebGL NO disponible. Navegador:', navigator.userAgent);
+      throw new Error('WebGL no disponible');
+    } else {
+      console.log('[Galaxia] WebGL OK:', gl.getParameter(gl.VERSION), '| Renderer:', gl.getParameter(gl.RENDERER));
+    }
   } catch (e) {
+    console.error('[Galaxia] Error inicializando WebGL:', e);
     showWebGLError();
     return null;
   }
