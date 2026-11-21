@@ -31,3 +31,10 @@ mkdir -p vendor/three/addons
 curl -L https://unpkg.com/three@0.160.0/build/three.module.js -o vendor/three/three.module.js
 curl -L https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js -o vendor/three/addons/controls/OrbitControls.js
 # ... resto de addons (EffectComposer, RenderPass, UnrealBloomPass, OutputPass)
+
+## 📜 Licencia
+
+MIT License · Copyright (c) 2026 Explorador Galáctico
+
+Three.js © three.js authors · MIT License
+https://github.com/mrdoob/three.js/blob/dev/LICENSE
