@@ -37,7 +37,7 @@ import {
   disposeAllBodies
 } from './celestial/CelestialBody.js';
 import { createOrbitLine, disposeOrbitLine } from './celestial/orbits.js';
-import { buildAsteroidBelt, buildKuiperBelt, updateBelts, disposeBelts } from './celestial/belts.js';
+import { buildAsteroidBelt, buildKuiperBelt, buildOortCloud, updateBelts, disposeBelts } from './celestial/belts.js';
 
 // UI
 import { initPanel } from './ui/panel.js';
