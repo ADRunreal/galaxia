@@ -152,6 +152,8 @@ async function init() {
     await nextFrame();
     buildAsteroidBelt(scene);
     buildKuiperBelt(scene);
+  buildOortCloud(scene);
+  console.log('[Galaxia] ✅ Nube de Oort generada');
     console.log('[Galaxia] ✅ Step 10: cinturones OK');
 
     // ─── Etiquetas ───
@@ -171,7 +173,18 @@ async function init() {
       onNebulaeToggle: (v) => setNebulaeVisible(v),
       onBloomToggle: (v) => setBloomEnabled(v),
       onQualityToggle: () => { /* placeholder */ }
-    });
+    ,
+    onScaleToggle: (isReal) => {
+      import('./config.js').then(cfg => {
+        window.__galaxiaConfig = cfg;
+        for (const id in bodies) {
+          bodies[id].applyScaleMode(isReal);
+        }
+        if (composer) composer.render();
+        console.log('[Galaxia] Escala cambiada a:', isReal ? 'REAL' : 'VISUAL');
+      });
+    }
+  });
 
     const search = initSearch((id) => flyToBody(id));
     search.buildCatalog(planetData);

@@ -73,18 +73,14 @@ export const EARTH_FRAG = `
   varying vec3 vNormalW;
   void main() {
     vec3 n = normalize(vNormalW);
-    // Cálculo suave del día/noche
     float ndl = dot(n, uSunDir);
-    float day = smoothstep(-0.15, 0.25, ndl); // Terminador suave
+    float day = smoothstep(-0.15, 0.25, ndl);
     vec3 dayCol = texture2D(dayMap, vUv).rgb;
     float landMask = smoothstep(0.0, 0.25, dayCol.g - dayCol.b);
-    vec3 nightCol = dayCol * 0.02; // Noche casi negra
-    // Luces de las ciudades en la cara nocturna
+    vec3 nightCol = dayCol * 0.02;
     nightCol += vec3(1.0, 0.65, 0.2) * landMask * 0.25;
-    // Iluminación del día
     vec3 litCol = dayCol * (0.05 + 0.95 * max(ndl, 0.0));
     vec3 col = mix(nightCol, litCol, day);
-    // Atmósfera azul en el terminador
     float terminator = 1.0 - abs(day * 2.0 - 1.0);
     col += vec3(0.1, 0.3, 0.7) * terminator * 0.15;
     gl_FragColor = vec4(col, 1.0);
@@ -102,7 +98,7 @@ export const CLOUD_FRAG = `
     float ndl = dot(normalize(vNormalW), uSunDir);
     float day = smoothstep(-0.15, 0.25, ndl);
     vec3 col = vec3(1.0) * (0.06 + 0.94 * day);
-    gl_FragColor = vec4(col, a * 0.45);
+    gl_FragColor = vec4(col, a * 0.35);
   }
 `;
 

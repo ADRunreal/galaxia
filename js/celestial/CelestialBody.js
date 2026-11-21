@@ -473,10 +473,8 @@ export class CelestialBody {
 
   updateEarthSunDir() {
     if (!this.earthMat || !this.cloudMat || !this.atmoMat) return;
-
     this.tiltGroup.getWorldPosition(this._tmpWorldPos);
     const sunDir = new THREE.Vector3(0, 0, 0).sub(this._tmpWorldPos).normalize();
-
     this.earthMat.uniforms.uSunDir.value.copy(sunDir);
     this.cloudMat.uniforms.uSunDir.value.copy(sunDir);
     this.atmoMat.uniforms.uSunDir.value.copy(sunDir);
