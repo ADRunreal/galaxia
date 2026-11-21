@@ -84,6 +84,21 @@ async function init() {
 
     // ─── Escena ───
     scene = createScene();
+  // Partículas de inmersión alrededor del Sol
+  const sunGlowGeo = new THREE.BufferGeometry();
+  const sunGlowPos = new Float32Array(500 * 3);
+  for (let i = 0; i < 500; i++) {
+    const r = 8 + Math.random() * 30;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    sunGlowPos[i*3] = Math.sin(phi) * Math.cos(theta) * r;
+    sunGlowPos[i*3+1] = Math.sin(phi) * Math.sin(theta) * r;
+    sunGlowPos[i*3+2] = Math.cos(phi) * r;
+  }
+  sunGlowGeo.setAttribute('position', new THREE.BufferAttribute(sunGlowPos, 3));
+  const sunGlowMat = new THREE.PointsMaterial({ color: 0xffaa00, size: 0.2, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
+  const sunGlowParticles = new THREE.Points(sunGlowGeo, sunGlowMat);
+  scene.add(sunGlowParticles);
     console.log('[Galaxia] ✅ Step 4: scene OK');
 
     // ─── Postprocesado ───

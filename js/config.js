@@ -10,11 +10,11 @@ export const BASE_RATE = 0.5; // 0.5 días por segundo
 /* Configuración de la galaxia procedural */
 export const GALAXY_CFG = {
   radius: 400,
-  stars: LOW_POWER ? 12000 : 50000,
+  stars: LOW_POWER ? 25000 : 80000,
   arms: 2,
   tightness: 0.135,
-  dust: LOW_POWER ? 1500 : 7000,
-  haze: LOW_POWER ? 800 : 3500
+  dust: LOW_POWER ? 3000 : 12000,
+  haze: LOW_POWER ? 2000 : 6000
 };
 
 /* Límite de tamaño de punto para la galaxia */
